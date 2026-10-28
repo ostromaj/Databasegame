@@ -7,6 +7,7 @@ A game-show style review of database normalization (1NF, 2NF, 3NF).
 - Each game draws randomly from a bank of 31 questions, so replays differ
 - Lifelines: 50:50, Ask the class, Phone a DBA (hint)
 - Safe levels at $1,000 and $32,000, plus a walk-away option
+- Original synthesized music and sound effects (no audio files): the music speeds up and climbs in key as the money rises; toggle with the Sound button or the M key
 - Keyboard: press A–D to pick, click Final answer (or pick the same letter again) to lock in
 
 Play it at https://ostromaj.github.io/Databasegame/

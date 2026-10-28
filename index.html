@@ -49,7 +49,7 @@ button:focus-visible,a:focus-visible{outline:3px solid var(--gold);outline-offse
   color:var(--ink);
 }
 .logo .small{display:block;font-size:.38em;font-weight:600;letter-spacing:.04em;color:var(--muted);margin-bottom:.15em}
-.logo .edition{display:inline-block;margin-top:0;padding:.12em .7em;font-size:.26em;font-weight:700;letter-spacing:.06em;color:#1a1440;background:var(--ink);border-radius:999px}
+.logo .edition{display:block;width:fit-content;margin:.45em auto 0;line-height:1.35;padding:.12em .7em;font-size:.26em;font-weight:700;letter-spacing:.06em;color:#1a1440;background:var(--ink);border-radius:999px}
 .logo .big{display:block;color:var(--gold);text-shadow:0 0 40px rgba(245,197,66,.35)}
 .tagline{max-width:34em;margin:22px auto 30px;color:var(--muted)}
 .cta-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
@@ -198,12 +198,31 @@ table.data td.empty{color:rgba(170,179,236,.45)}
   .prompt{clip-path:none;border-radius:14px;padding:14px 16px}
   .ans{min-height:54px}
 }
+.sound-btn{
+  position:fixed;top:14px;right:14px;z-index:20;
+  display:flex;align-items:center;gap:8px;
+  padding:7px 14px 7px 10px;border-radius:999px;
+  border:2px solid var(--line);background:rgba(9,14,58,.85);
+  font-family:var(--display);font-weight:700;font-size:17px;letter-spacing:.02em;
+}
+.sound-btn svg{width:22px;height:22px;flex:none}
+.sound-btn:hover{border-color:var(--gold);color:var(--gold)}
+.sound-btn[aria-pressed="false"]{color:var(--muted)}
+@media (max-width:860px){ .sound-btn{top:auto;bottom:14px} }
 @media (prefers-reduced-motion:reduce){
   *{transition:none !important;animation:none !important}
 }
 </style>
 </head>
 <body>
+<button class="sound-btn" id="soundBtn" aria-pressed="true" title="Toggle music and sound (M)">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor" stroke="none"/>
+    <path id="waves" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/>
+    <path id="mutex" d="M17 9l5 6M22 9l-5 6" style="display:none"/>
+  </svg>
+  <span id="soundLabel">Sound on</span>
+</button>
 <div class="wrap">
 
   <!-- Title -->
@@ -551,6 +570,182 @@ const SAFE = new Set([4, 9]); // indexes of $1,000 and $32,000
 const fmt = n => "$" + n.toLocaleString("en-US");
 
 /* ============================================================
+   SOUND: all music is synthesized live with the Web Audio API.
+   No audio files, all original patterns.
+   ============================================================ */
+const Sound = (() => {
+  let ctx=null, master, music, sfx, noiseBuf, bed=null;
+  let muted = false;
+  try { muted = localStorage.getItem("wwtbr-muted")==="1"; } catch(e){}
+  const MASTER_VOL = 0.85;
+  const semi = (f,n) => f*Math.pow(2,n/12);
+
+  function init(){
+    if (ctx){ if (ctx.state==="suspended") ctx.resume(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    ctx = new AC();
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -16; comp.ratio.value = 4;
+    master = ctx.createGain(); master.gain.value = muted?0:MASTER_VOL;
+    master.connect(comp); comp.connect(ctx.destination);
+    music = ctx.createGain(); music.gain.value = 0.42; music.connect(master);
+    sfx = ctx.createGain(); sfx.gain.value = 0.8; sfx.connect(master);
+    noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+    const d = noiseBuf.getChannelData(0); for (let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+  }
+  const ready = () => !!ctx;
+
+  function tone(freq, t, dur, o={}){
+    const {type="sine", gain=0.2, dest=sfx, attack=0.01, release=0.12, detune=0, cutoff=null, glide=null} = o;
+    const osc = ctx.createOscillator(); osc.type=type; osc.frequency.setValueAtTime(freq,t); osc.detune.value=detune;
+    if (glide) osc.frequency.exponentialRampToValueAtTime(glide, t+dur);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(gain, t+attack);
+    g.gain.setValueAtTime(gain, Math.max(t+attack, t+dur-release));
+    g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+    let node = osc;
+    if (cutoff){ const f=ctx.createBiquadFilter(); f.type="lowpass"; f.frequency.value=cutoff; osc.connect(f); node=f; }
+    node.connect(g); g.connect(dest);
+    osc.start(t); osc.stop(t+dur+0.05);
+  }
+  function noise(t, dur, o={}){
+    const {gain=0.1, dest=sfx, type="highpass", freq=6000, q=0.7, sweepTo=null} = o;
+    const src = ctx.createBufferSource(); src.buffer=noiseBuf;
+    const f = ctx.createBiquadFilter(); f.type=type; f.frequency.setValueAtTime(freq,t); f.Q.value=q;
+    if (sweepTo) f.frequency.exponentialRampToValueAtTime(sweepTo, t+dur);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(gain,t); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    src.connect(f); f.connect(g); g.connect(dest);
+    src.start(t); src.stop(t+dur+0.02);
+  }
+
+  /* ---------- Looping background beds ---------- */
+  // Chords are semitone offsets from the bed's root.
+  const TITLE = {bpm:76, chords:[[0,4,7],[-5,-1,2],[-3,0,4],[-7,-3,0]]};          // warm major loop
+  const GAME  = {bpm:92, chords:[[0,3,7],[-4,0,3],[-7,-4,0],[-5,-1,2]]};          // tense minor loop
+
+  function startBed(kind, tier=0){
+    if (!ready()) return;
+    if (bed && bed.kind===kind && bed.tier===tier) return;
+    stopBed(0.6);
+    const spec = kind==="title" ? TITLE : GAME;
+    const out = ctx.createGain(); out.gain.setValueAtTime(0.0001, ctx.currentTime);
+    out.gain.exponentialRampToValueAtTime(1, ctx.currentTime+1.2); out.connect(music);
+    const root = semi(220, kind==="title" ? 0 : tier);       // each tier nudges the key up a semitone
+    const bpm = spec.bpm + (kind==="game" ? tier*12 : 0);    // ...and speeds up
+    const stepDur = 60/bpm/4;
+    const me = {kind, tier, out, step:0, next:ctx.currentTime+0.08, timer:null};
+    me.timer = setInterval(()=>{
+      while (me.next < ctx.currentTime + 0.15){ playStep(me, spec, root, stepDur, tier); me.next += stepDur; me.step++; }
+    }, 30);
+    bed = me;
+  }
+
+  function playStep(me, spec, root, sd, tier){
+    const t = me.next, s = me.step % 16, bar = Math.floor(me.step/16);
+    const chord = spec.chords[bar % spec.chords.length];
+    const out = me.out;
+    if (me.kind==="title"){
+      if (s===0) chord.forEach(n=>{ [-6,6].forEach(dt=>tone(semi(root,n), t, sd*16, {type:"sawtooth", gain:0.022, dest:out, attack:0.6, release:0.8, detune:dt, cutoff:900})); });
+      if (s%4===0){ const n = chord[(s/4)%3] + 12 + (s===12?12:0); tone(semi(root,n), t, sd*6, {type:"sine", gain:0.07, dest:out, attack:0.005, release:sd*5}); }
+      if (s===0) tone(semi(root,chord[0]-12), t, sd*14, {type:"triangle", gain:0.09, dest:out, attack:0.05, release:0.6});
+      return;
+    }
+    // Game bed: pad, heartbeat bass, hats, and an arpeggio that gets busier with the tier.
+    if (s===0) chord.forEach(n=>{ [-7,7].forEach(dt=>tone(semi(root,n), t, sd*16, {type:"sawtooth", gain:0.018, dest:out, attack:0.4, release:0.5, detune:dt, cutoff:700+tier*450})); });
+    if (s===0 || s===3 || s===8 || s===11){
+      const f = semi(root, chord[0]-12);
+      tone(f*1.5, t, 0.22, {type:"sine", gain:(s===0||s===8)?0.32:0.2, dest:out, attack:0.004, release:0.18, glide:f*0.75});
+    }
+    if (s%4===2) noise(t, 0.05, {gain:0.05, dest:out, freq:7500});
+    if (tier>=1 && s%2===1) noise(t, 0.03, {gain:0.022, dest:out, freq:9000});
+    const arpEvery = tier===0 ? 4 : tier===1 ? 2 : 1;
+    if (s % arpEvery === 0){
+      const idx = (s/arpEvery) % 4;
+      const n = [chord[0],chord[1],chord[2],chord[1]][idx] + 12;
+      tone(semi(root,n), t, sd*0.9, {type:"square", gain:0.022, dest:out, attack:0.003, release:sd*0.7, cutoff:1800+tier*600});
+    }
+    if (tier===2 && s===15) noise(t, 0.25, {gain:0.04, dest:out, type:"bandpass", freq:500, sweepTo:3000, q:2});
+  }
+
+  function stopBed(fade=0.4){
+    if (!bed || !ready()) return;
+    const b = bed; bed = null;
+    clearInterval(b.timer);
+    const now = ctx.currentTime;
+    b.out.gain.cancelScheduledValues(now);
+    b.out.gain.setValueAtTime(Math.max(b.out.gain.value,0.0001), now);
+    b.out.gain.exponentialRampToValueAtTime(0.0001, now+fade);
+    setTimeout(()=>{ try{ b.out.disconnect(); }catch(e){} }, (fade+0.6)*1000);
+  }
+
+  /* ---------- Stings and effects ---------- */
+  const fx = {
+    select(){ if(!ready())return; const t=ctx.currentTime; tone(660,t,0.09,{type:"triangle",gain:0.12}); tone(990,t+0.05,0.1,{type:"triangle",gain:0.08}); },
+    thinking(dur){
+      if(!ready())return; const t=ctx.currentTime;
+      // drum roll that speeds up, over a rising low swell
+      let x=0, gap=0.11;
+      while (x < dur-0.05){ noise(t+x, 0.07, {gain:0.05+0.1*(x/dur), type:"bandpass", freq:240, q:1.2}); x+=gap; gap=Math.max(0.035, gap*0.93); }
+      tone(82, t, dur, {type:"sawtooth", gain:0.12, attack:dur*0.8, release:0.05, glide:165, cutoff:500});
+      tone(123, t, dur, {type:"sine", gain:0.1, attack:dur*0.8, release:0.05, glide:247});
+    },
+    correct(){
+      if(!ready())return; const t=ctx.currentTime, r=330;
+      [0,4,7,12].forEach((n,i)=>tone(semi(r,n), t+i*0.07, 0.25, {type:"triangle", gain:0.18}));
+      [0,4,7,12,16].forEach(n=>tone(semi(r,n), t+0.3, 1.1, {type:"sawtooth", gain:0.04, attack:0.02, release:0.8, cutoff:2600}));
+      noise(t+0.3, 0.9, {gain:0.06, freq:8000});
+    },
+    wrong(){
+      if(!ready())return; const t=ctx.currentTime;
+      [0,-1,-2].forEach((n,i)=>tone(semi(196,n), t+i*0.32, 0.3, {type:"sawtooth", gain:0.14, cutoff:900, release:0.1}));
+      tone(semi(196,-4), t+0.96, 1.1, {type:"sawtooth", gain:0.15, cutoff:700, release:0.6, glide:semi(196,-6)});
+      tone(65, t, 0.5, {type:"sine", gain:0.3, glide:40});
+    },
+    lifeline(){ if(!ready())return; const t=ctx.currentTime; noise(t,0.45,{gain:0.12,type:"bandpass",freq:400,sweepTo:4000,q:3}); tone(523,t+0.25,0.3,{type:"sine",gain:0.1}); tone(784,t+0.33,0.35,{type:"sine",gain:0.09}); },
+    fifty(){ if(!ready())return; const t=ctx.currentTime; tone(880,t,0.12,{type:"square",gain:0.07,cutoff:2000,glide:440}); tone(880,t+0.16,0.12,{type:"square",gain:0.07,cutoff:2000,glide:440}); },
+    million(){
+      if(!ready())return; const t=ctx.currentTime, r=262;
+      [0,4,7,12,16,19,24].forEach((n,i)=>tone(semi(r,n), t+i*0.09, 0.3, {type:"triangle", gain:0.16}));
+      [[0,4,7],[5,9,12],[7,11,14],[12,16,19,24]].forEach((ch,j)=>ch.forEach(n=>
+        tone(semi(r,n), t+0.7+j*0.45, j===3?2.4:0.42, {type:"sawtooth", gain:0.045, attack:0.02, release:j===3?1.6:0.15, cutoff:3000})));
+      [0.7,1.15,1.6,2.05].forEach(x=>tone(65,t+x,0.3,{type:"sine",gain:0.35,glide:45}));
+      noise(t+2.05, 2.2, {gain:0.12, freq:6000});
+    },
+    walk(){ if(!ready())return; const t=ctx.currentTime; [0,4,7].forEach((n,i)=>tone(semi(294,n), t+i*0.12, 1.2-i*0.12, {type:"triangle", gain:0.12, release:0.8})); }
+  };
+
+  function setMuted(m){
+    muted = m;
+    try { localStorage.setItem("wwtbr-muted", m?"1":"0"); } catch(e){}
+    if (ready()) master.gain.setTargetAtTime(m?0:MASTER_VOL, ctx.currentTime, 0.05);
+  }
+
+  document.addEventListener("visibilitychange",()=>{
+    if (!ready()) return;
+    if (document.hidden) ctx.suspend(); else ctx.resume();
+  });
+
+  return {init, startBed, stopBed, fx, setMuted, isMuted:()=>muted};
+})();
+
+function syncSoundBtn(){
+  const on = !Sound.isMuted();
+  $("soundBtn").setAttribute("aria-pressed", String(on));
+  $("soundLabel").textContent = on ? "Sound on" : "Sound off";
+  document.getElementById("waves").style.display = on ? "" : "none";
+  document.getElementById("mutex").style.display = on ? "none" : "";
+}
+function toggleSound(){ Sound.init(); Sound.setMuted(!Sound.isMuted()); syncSoundBtn(); if (!Sound.isMuted()) musicForScreen(); }
+function musicForScreen(){
+  if (!$("titleScreen").classList.contains("hidden")) Sound.startBed("title");
+  else if (!$("gameScreen").classList.contains("hidden") && !locked) Sound.startBed("game", tierOf(level));
+}
+const tierOf = l => l<5 ? 0 : l<10 ? 1 : 2;
+
+/* ============================================================
    STATE
    ============================================================ */
 let questions = [], level = 0, selected = null, locked = false;
@@ -642,6 +837,7 @@ function renderQuestion(){
   $("actions").innerHTML = "";
   updateLifelines();
   renderLadder();
+  Sound.startBed("game", tierOf(level));
   window.scrollTo({top:0, behavior: reduceMotion ? "auto" : "smooth"});
 }
 
@@ -666,6 +862,7 @@ function choose(i){
   if (btns[i].classList.contains("gone")) return;
   if (selected === i){ finalAnswer(); return; }
   selected = i;
+  Sound.fx.select();
   btns.forEach((b,j)=>b.classList.toggle("selected", j===i));
   const act = $("actions"); act.innerHTML="";
   const fa = el("button","btn","Final answer"); fa.addEventListener("click", finalAnswer);
@@ -680,7 +877,10 @@ function finalAnswer(){
   btns.forEach(b=>b.disabled=true);
   $("actions").innerHTML="";
   btns[selected].classList.add("thinking");
-  setTimeout(()=>reveal(btns), reduceMotion ? 300 : 1600);
+  const wait = reduceMotion ? 300 : 2000;
+  Sound.stopBed(0.25);
+  Sound.fx.thinking(wait/1000);
+  setTimeout(()=>reveal(btns), wait);
 }
 
 function reveal(btns){
@@ -689,6 +889,7 @@ function reveal(btns){
   btns[right].classList.add("correct");
   const ok = selected===right;
   if (!ok) btns[selected].classList.add("wrong");
+  ok ? Sound.fx.correct() : Sound.fx.wrong();
 
   const p = el("div","panel " + (ok?"good":"bad"));
   p.append(el("h3",null, ok ? pickLine(RIGHT_LINES) : `The answer was ${"ABCD"[right]}: ${current.opts[right].t}`));
@@ -715,6 +916,7 @@ const pickLine = a => a[Math.floor(Math.random()*a.length)];
 $("l5050").addEventListener("click",()=>{
   if (!lifelines.fifty || locked) return;
   lifelines.fifty = false;
+  Sound.fx.fifty();
   const wrongs = shuffle(current.opts.map((o,i)=>o.correct?null:i).filter(i=>i!==null)).slice(0,2);
   const btns = [...$("answers").children];
   wrongs.forEach(i=>{ btns[i].classList.add("gone"); btns[i].disabled=true; if(selected===i){selected=null;$("actions").innerHTML="";btns[i].classList.remove("selected");} });
@@ -724,6 +926,7 @@ $("l5050").addEventListener("click",()=>{
 $("lPoll").addEventListener("click",()=>{
   if (!lifelines.poll || locked) return;
   lifelines.poll = false; updateLifelines();
+  Sound.fx.lifeline();
   const btns = [...$("answers").children];
   const live = current.opts.map((o,i)=>btns[i].classList.contains("gone")?null:i).filter(i=>i!==null);
   const right = current.opts.findIndex(o=>o.correct);
@@ -758,6 +961,7 @@ $("lPoll").addEventListener("click",()=>{
 $("lPhone").addEventListener("click",()=>{
   if (!lifelines.phone || locked) return;
   lifelines.phone = false; updateLifelines();
+  Sound.fx.lifeline();
   const panel = el("div","panel hint");
   panel.append(el("h3",null,"Your DBA friend says"));
   panel.append(el("p",null,current.hint));
@@ -768,6 +972,7 @@ $("walkBtn").addEventListener("click",()=>{ if(!locked) endGame("walk"); });
 
 /* keyboard: A-D to pick, Enter to confirm */
 document.addEventListener("keydown",e=>{
+  if (e.key.toLowerCase()==="m" && !e.metaKey && !e.ctrlKey){ toggleSound(); return; }
   if ($("gameScreen").classList.contains("hidden") || locked) return;
   const k = e.key.toLowerCase();
   const idx = "abcd".indexOf(k);
@@ -798,19 +1003,29 @@ function endGame(how){
   }
   const row = el("div","cta-row");
   const again = el("button","btn","Play again"); again.addEventListener("click",start);
-  const home = el("button","btn ghost","Back to title"); home.addEventListener("click",()=>show("titleScreen"));
+  const home = el("button","btn ghost","Back to title"); home.addEventListener("click",()=>{ show("titleScreen"); Sound.startBed("title"); });
   row.append(again,home); s.append(row);
   show("endScreen");
   again.focus();
+  Sound.stopBed(0.3);
+  if (how==="million") Sound.fx.million();
+  if (how==="walk") Sound.fx.walk();
+  setTimeout(()=>{ if(!$("endScreen").classList.contains("hidden")) Sound.startBed("title"); }, how==="million" ? 4500 : 2200);
 }
 
-function start(){ buildGame(); show("gameScreen"); renderQuestion(); }
+function start(){ Sound.init(); buildGame(); show("gameScreen"); renderQuestion(); }
 
 $("startBtn").addEventListener("click",start);
 $("refreshBtn").addEventListener("click",()=>{
   const r = $("refresher"); const open = r.classList.toggle("hidden")===false;
   $("refreshBtn").setAttribute("aria-expanded", open);
 });
+$("soundBtn").addEventListener("click", toggleSound);
+syncSoundBtn();
+// Browsers only allow audio after the first click or key press.
+const wake = () => { Sound.init(); if (!Sound.isMuted()) musicForScreen(); };
+document.addEventListener("pointerdown", wake, {once:true});
+document.addEventListener("keydown", wake, {once:true});
 </script>
 </body>
 </html>
