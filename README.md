@@ -1,4 +1,4 @@
-# Who Wants to Be Normalized?
+# Who Wants to Be Rich? Database Edition
 
 A game-show style review of database normalization (1NF, 2NF, 3NF).
 
