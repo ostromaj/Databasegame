@@ -1,0 +1,815 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Who Wants to Be Normalized?</title>
+<meta name="description" content="A game-show review of database normalization: 1NF, 2NF and 3NF.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --stage-deep:#0d1450;
+  --stage:#17217a;
+  --spot:#2e3fc0;
+  --panel:#141d68;
+  --line:#4a5bd8;
+  --gold:#f5c542;
+  --gold-deep:#b98a12;
+  --ink:#f1f3ff;
+  --muted:#aab3ec;
+  --right:#2fbf71;
+  --wrong:#e5484d;
+  --display:"Barlow Condensed", "Arial Narrow", sans-serif;
+  --body:"Atkinson Hyperlegible", system-ui, sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{
+  background:var(--stage-deep);
+  background-image:
+    radial-gradient(ellipse 70% 55% at 50% -5%, var(--spot) 0%, transparent 70%),
+    radial-gradient(ellipse 120% 80% at 50% 120%, #090e3a 0%, transparent 60%);
+  background-attachment:fixed;
+  color:var(--ink);
+  font-family:var(--body);
+  font-size:17px;
+  line-height:1.5;
+}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,a:focus-visible{outline:3px solid var(--gold);outline-offset:3px}
+.wrap{max-width:1180px;margin:0 auto;padding:20px 16px 48px}
+
+/* ---------- Title screen ---------- */
+.title-screen{min-height:calc(100vh - 68px);display:grid;place-items:center;text-align:center}
+.logo{
+  font-family:var(--display);font-weight:800;line-height:.86;
+  font-size:clamp(56px,11vw,128px);letter-spacing:-.01em;margin:0;
+  color:var(--ink);
+}
+.logo .small{display:block;font-size:.38em;font-weight:600;letter-spacing:.04em;color:var(--muted);margin-bottom:.15em}
+.logo .big{display:block;color:var(--gold);text-shadow:0 0 40px rgba(245,197,66,.35)}
+.tagline{max-width:34em;margin:22px auto 30px;color:var(--muted)}
+.cta-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+.btn{
+  font-family:var(--display);font-weight:700;font-size:22px;letter-spacing:.02em;
+  padding:12px 34px;border:2px solid var(--gold);background:var(--gold);color:#1a1440;
+  clip-path:polygon(14px 0,calc(100% - 14px) 0,100% 50%,calc(100% - 14px) 100%,14px 100%,0 50%);
+}
+.btn:hover{background:#ffd866}
+.btn.ghost{background:transparent;color:var(--gold)}
+.btn.ghost:hover{background:rgba(245,197,66,.12)}
+.refresher{max-width:640px;margin:28px auto 0;text-align:left;border:1px solid var(--line);background:rgba(20,29,104,.75);border-radius:14px;padding:6px 22px 14px}
+.refresher h2{font-family:var(--display);font-weight:700;font-size:26px;margin:12px 0 6px}
+.refresher dl{margin:0}
+.refresher dt{font-family:var(--display);font-weight:700;font-size:21px;color:var(--gold);margin-top:12px}
+.refresher dd{margin:2px 0 0}
+.refresher .saying{margin-top:14px;color:var(--muted);font-style:italic}
+
+/* ---------- Game layout ---------- */
+.game{display:grid;grid-template-columns:minmax(0,1fr) 250px;gap:26px;align-items:start}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.qnum{font-family:var(--display);font-weight:700;font-size:24px;margin:0}
+.qnum span{color:var(--gold)}
+.tier{font-size:14px;color:var(--muted)}
+.lifelines{display:flex;gap:10px;flex-wrap:wrap}
+.life{
+  border:2px solid var(--line);background:var(--panel);border-radius:999px;
+  padding:6px 16px;font-family:var(--display);font-weight:700;font-size:18px;letter-spacing:.02em;
+}
+.life:hover:not(:disabled){border-color:var(--gold);color:var(--gold)}
+.life:disabled{opacity:.35;cursor:not-allowed;text-decoration:line-through}
+.walk{border-color:transparent;background:transparent;color:var(--muted);text-decoration:underline;text-underline-offset:3px}
+.walk:hover:not(:disabled){color:var(--gold)}
+.walk:disabled{text-decoration:underline}
+
+/* Table card */
+.screen{
+  background:linear-gradient(180deg,rgba(23,33,122,.92),rgba(13,20,80,.92));
+  border:1px solid var(--line);border-radius:16px;padding:18px 20px;margin-bottom:16px;
+  box-shadow:0 0 0 4px rgba(46,63,192,.25), 0 18px 50px rgba(5,8,40,.55);
+}
+.tname{font-family:var(--display);font-weight:700;font-size:24px;margin:0 0 10px;letter-spacing:.03em}
+.tscroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table.data{border-collapse:collapse;min-width:100%;font-size:16px}
+table.data th,table.data td{border:1px solid rgba(74,91,216,.6);padding:7px 12px;text-align:left;white-space:nowrap}
+table.data th{background:rgba(46,63,192,.45);font-weight:700}
+table.data th.pk{color:var(--gold);text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:4px}
+table.data td.empty{color:rgba(170,179,236,.45)}
+.legend{font-size:14px;color:var(--muted);margin:8px 0 0}
+.legend b{color:var(--gold);text-decoration:underline;text-underline-offset:3px}
+.deps{margin:14px 0 0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:8px}
+.deps li{background:rgba(9,14,58,.6);border:1px solid rgba(74,91,216,.7);border-radius:8px;padding:4px 10px;font-size:15px}
+.deps-label{font-size:14px;color:var(--muted);margin:14px 0 0}
+.note{margin:12px 0 0;font-size:15px;color:var(--muted)}
+
+.prompt{
+  font-size:clamp(19px,2.3vw,23px);font-weight:700;text-align:center;line-height:1.35;
+  margin:6px auto 18px;max-width:40em;padding:16px 26px;
+  background:var(--panel);border:2px solid var(--line);
+  clip-path:polygon(22px 0,calc(100% - 22px) 0,100% 50%,calc(100% - 22px) 100%,22px 100%,0 50%);
+}
+
+/* Answer bars: the one loud thing */
+.answers{display:grid;grid-template-columns:1fr 1fr;gap:12px 14px}
+.ans{
+  position:relative;display:flex;align-items:center;gap:12px;text-align:left;
+  min-height:62px;padding:10px 30px;border:0;
+  background:var(--line);
+  clip-path:polygon(20px 0,calc(100% - 20px) 0,100% 50%,calc(100% - 20px) 100%,20px 100%,0 50%);
+  transition:transform .12s ease;
+}
+.ans::before{
+  content:"";position:absolute;inset:2px;z-index:0;
+  background:linear-gradient(180deg,#1c2788,#0f1660);
+  clip-path:polygon(19px 0,calc(100% - 19px) 0,100% 50%,calc(100% - 19px) 100%,19px 100%,0 50%);
+}
+.ans > *{position:relative;z-index:1}
+.ans .letter{font-family:var(--display);font-weight:800;font-size:22px;color:var(--gold);min-width:20px}
+.ans .txt{font-size:17px;line-height:1.3}
+.ans:hover:not(:disabled){transform:translateY(-1px)}
+.ans:hover:not(:disabled)::before{background:linear-gradient(180deg,#2738a6,#16207a)}
+.ans.selected{background:var(--gold)}
+.ans.selected::before{background:linear-gradient(180deg,#ffd866,#e2ad22)}
+.ans.selected .letter,.ans.selected .txt{color:#1a1440}
+.ans.correct{background:#9ff0c2}
+.ans.correct::before{background:linear-gradient(180deg,#3ad883,#219b59)}
+.ans.correct .letter,.ans.correct .txt{color:#04210f}
+.ans.wrong{background:#ffb3b5}
+.ans.wrong::before{background:linear-gradient(180deg,#f0656a,#b9282d)}
+.ans.wrong .letter,.ans.wrong .txt{color:#fff}
+.ans.gone{visibility:hidden}
+.ans:disabled{cursor:default}
+.ans.thinking{animation:think .5s ease-in-out infinite alternate}
+@keyframes think{to{filter:brightness(1.25)}}
+
+.actions{display:flex;justify-content:center;gap:12px;margin-top:18px;min-height:52px;flex-wrap:wrap}
+
+.panel{
+  margin-top:18px;border-radius:14px;padding:14px 18px;
+  background:rgba(9,14,58,.75);border:1px solid var(--line);
+}
+.panel h3{font-family:var(--display);font-weight:700;font-size:22px;margin:0 0 4px}
+.panel p{margin:4px 0 0}
+.panel.good{border-color:var(--right)}
+.panel.good h3{color:#7ee8ae}
+.panel.bad{border-color:var(--wrong)}
+.panel.bad h3{color:#ff9a9d}
+.panel.hint h3{color:var(--gold)}
+
+.poll{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;align-items:end;height:150px;margin-top:10px}
+.poll .col{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}
+.poll .bar{width:60%;max-width:46px;background:linear-gradient(180deg,var(--gold),var(--gold-deep));border-radius:4px 4px 0 0;height:0;transition:height .9s cubic-bezier(.2,.8,.2,1)}
+.poll .pct{font-weight:700;font-size:15px;margin-bottom:4px}
+.poll .lab{font-family:var(--display);font-weight:800;font-size:20px;color:var(--gold);margin-top:4px}
+
+/* Money ladder */
+.ladder{list-style:none;margin:0;padding:12px 10px;background:rgba(9,14,58,.7);border:1px solid var(--line);border-radius:16px;position:sticky;top:16px}
+.ladder li{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:3px 12px;border-radius:999px;font-family:var(--display);font-weight:600;font-size:19px;color:var(--muted);
+}
+.ladder li .n{min-width:24px;opacity:.75}
+.ladder li.safe{color:var(--ink);font-weight:800}
+.ladder li.done{color:#7ee8ae}
+.ladder li.now{background:var(--gold);color:#1a1440;font-weight:800}
+.ladder-mini{display:none}
+
+/* End screen */
+.end{max-width:720px;margin:6vh auto 0;text-align:center}
+.end .won{font-family:var(--display);font-weight:800;font-size:clamp(64px,12vw,120px);color:var(--gold);line-height:1;margin:6px 0 4px;text-shadow:0 0 40px rgba(245,197,66,.35)}
+.end h2{font-family:var(--display);font-weight:700;font-size:32px;margin:0}
+.end p{color:var(--muted);margin:10px auto 24px;max-width:32em}
+.end .panel{text-align:left;margin-bottom:24px}
+
+.hidden{display:none !important}
+
+@media (max-width:860px){
+  .game{grid-template-columns:minmax(0,1fr)}
+  .ladder{display:none}
+  .ladder-mini{display:flex;justify-content:space-between;gap:10px;font-family:var(--display);font-weight:700;font-size:18px;margin:0 0 12px;color:var(--muted)}
+  .ladder-mini b{color:var(--gold)}
+}
+@media (max-width:620px){
+  body{font-size:16px}
+  .answers{grid-template-columns:1fr}
+  .prompt{clip-path:none;border-radius:14px;padding:14px 16px}
+  .ans{min-height:54px}
+}
+@media (prefers-reduced-motion:reduce){
+  *{transition:none !important;animation:none !important}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Title -->
+  <section id="titleScreen" class="title-screen">
+    <div>
+      <h1 class="logo"><span class="small">Who wants to be</span><span class="big">Normalized?</span></h1>
+      <p class="tagline">Fifteen tables stand between you and a million dollars. Spot whether each one is in 1NF, 2NF or 3NF, or not even in 1NF. Questions get harder as the money goes up.</p>
+      <div class="cta-row">
+        <button class="btn" id="startBtn">Start the game</button>
+        <button class="btn ghost" id="refreshBtn" aria-expanded="false" aria-controls="refresher">Quick refresher</button>
+      </div>
+      <div class="refresher hidden" id="refresher">
+        <h2>The three rules</h2>
+        <dl>
+          <dt>1NF</dt>
+          <dd>Every cell holds one single value. No lists in a cell, no repeating columns like Item1, Item2, Item3. Rows are identified by a primary key.</dd>
+          <dt>2NF</dt>
+          <dd>1NF, plus no partial dependencies: no non-key column can depend on only part of a composite key. A one-column key gets this for free.</dd>
+          <dt>3NF</dt>
+          <dd>2NF, plus no transitive dependencies: no non-key column can depend on another non-key column.</dd>
+        </dl>
+        <p class="saying">Every non-key column depends on the key, the whole key, and nothing but the key.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Game -->
+  <section id="gameScreen" class="hidden">
+    <div class="ladder-mini" id="ladderMini"></div>
+    <div class="game">
+      <div>
+        <div class="topbar">
+          <div>
+            <p class="qnum" id="qnum"></p>
+            <div class="tier" id="tier"></div>
+          </div>
+          <div class="lifelines">
+            <button class="life" id="l5050" title="Remove two wrong answers">50:50</button>
+            <button class="life" id="lPoll" title="See how the class would vote">Ask the class</button>
+            <button class="life" id="lPhone" title="Get a hint from a database admin">Phone a DBA</button>
+            <button class="life walk" id="walkBtn"></button>
+          </div>
+        </div>
+
+        <div id="tableCard" class="screen"></div>
+        <div class="prompt" id="prompt"></div>
+        <div class="answers" id="answers"></div>
+        <div id="extraPanel"></div>
+        <div class="actions" id="actions"></div>
+      </div>
+      <ol class="ladder" id="ladder" reversed></ol>
+    </div>
+  </section>
+
+  <!-- End -->
+  <section id="endScreen" class="hidden end"></section>
+</div>
+
+<script>
+/* ============================================================
+   QUESTION BANK
+   answer = index into options. If options are omitted, the
+   standard normal-form options are used.
+   ============================================================ */
+const NF = ["Not even in 1NF", "1NF", "2NF", "3NF"];
+const HIGHEST = "What's the highest normal form this table is in?";
+
+const BANK = {
+easy: [
+  {
+    table:{name:"STUDENT", cols:["StudentID","Name","Phones"], pk:["StudentID"],
+      rows:[["1042","Maya Chen","301-555-0142, 240-555-0199"],["1043","Leo Park","301-555-0187"],["1044","Ana Silva","240-555-0110"]]},
+    answer:0,
+    hint:"Look closely at Maya's Phones cell. How many values are crammed in there?",
+    explain:"Maya's Phones cell holds two phone numbers. 1NF needs every cell to hold one single value, so this table isn't even in 1NF. Fix: a separate PHONE(StudentID, PhoneNumber) table."
+  },
+  {
+    table:{name:"STUDENT", cols:["StudentID","FirstName","LastName","Homeroom"], pk:["StudentID"],
+      rows:[["1042","Maya","Chen","214"],["1043","Leo","Park","108"],["1044","Ana","Silva","214"]]},
+    answer:3,
+    hint:"One-column key, one value per cell. Does any non-key column decide another one?",
+    explain:"Every cell holds one value, the key is a single column (so partial dependencies are impossible), and nothing except StudentID decides the other columns. That's 3NF."
+  },
+  {
+    table:{name:"ORDER", cols:["OrderID","Customer","Item1","Item2","Item3"], pk:["OrderID"],
+      rows:[["5001","Ana","Pencil","Ruler",""],["5002","Ben","Eraser","",""],["5003","Cy","Glue","Tape","Scissors"]]},
+    answer:0,
+    hint:"What happens when someone orders four things?",
+    explain:"Item1, Item2, Item3 is a repeating group: the same kind of data spread across numbered columns. 1NF bans repeating groups, so this isn't even in 1NF. Fix: ORDER_ITEM(OrderID, Item), one row per item."
+  },
+  {
+    table:{name:"PET", cols:["PetID","PetName","Species","OwnerID"], pk:["PetID"],
+      rows:[["P1","Biscuit","Dog","O7"],["P2","Mochi","Cat","O7"],["P3","Pickles","Lizard","O9"]]},
+    note:"OwnerID is a foreign key pointing to a separate OWNER table.",
+    answer:3,
+    hint:"OwnerID repeats, but it's a foreign key. Is any owner info actually duplicated here?",
+    explain:"Single-column key, one value per cell, and every column depends only on PetID. OwnerID repeating is fine: it's just a link, and the owner's details live in their own table. 3NF."
+  },
+  {
+    table:{name:"CLASS", cols:["ClassID","Teacher","Students"], pk:["ClassID"],
+      rows:[["CS-3","Ms. Ruiz","Ana, Ben, Cy"],["MA-1","Mr. Okafor","Dev, Eli"]]},
+    answer:0,
+    hint:"Count the names in a single Students cell.",
+    explain:"The Students cell holds a whole list of names. That breaks 1NF's one-value-per-cell rule. Fix: a CLASS_STUDENT(ClassID, StudentID) table."
+  },
+  {
+    prompt:"Which of these is a rule of 1NF?",
+    options:["Each cell holds one single value","No non-key column depends on another non-key column","No column depends on just part of the key","Every table needs a foreign key"],
+    answer:0,
+    hint:"1NF is the most basic rule. It's about what goes inside a single cell.",
+    explain:"1NF is all about atomic values: one value per cell, no lists, no repeating groups. The partial-dependency rule is 2NF, and the non-key-to-non-key rule is 3NF."
+  },
+  {
+    prompt:"A partial dependency can only happen when...",
+    options:["The primary key is made of two or more columns","The table has more than ten rows","A cell holds a list of values","The table has a foreign key"],
+    answer:0,
+    hint:"Partial means depending on part of the key. When does a key even have parts?",
+    explain:"Partial dependency means a column depends on part of the key. A key only has parts when it's composite (two or more columns). One-column keys can't have partial dependencies."
+  },
+  {
+    table:{name:"BOOK", cols:["ISBN","Title","PublishYear","Pages"], pk:["ISBN"],
+      rows:[["978-0141439518","Pride and Prejudice","1813","432"],["978-0451524935","1984","1949","328"]]},
+    answer:3,
+    hint:"Does knowing the PublishYear tell you the Title? Does anything decide anything except ISBN?",
+    explain:"One value per cell, a one-column key, and every column depends only on ISBN. No partial or transitive dependencies, so it's 3NF."
+  },
+  {
+    prompt:"What's a transitive dependency?",
+    options:["A non-key column depends on another non-key column","A column depends on only part of a composite key","A cell holds more than one value","Two tables share the same primary key"],
+    answer:0,
+    hint:"Think of a chain: key decides A, then A decides B.",
+    explain:"Transitive means a chain: Key → A → B, where A and B are both non-key columns. Removing those chains is what 3NF is about."
+  },
+  {
+    table:{name:"MOVIE", cols:["MovieID","Title","Genres"], pk:["MovieID"],
+      rows:[["M1","Space Llamas","Comedy, Sci-Fi"],["M2","The Quiet Lake","Drama"],["M3","Deadline","Action, Thriller"]]},
+    answer:0,
+    hint:"What's inside the Genres cell for Space Llamas?",
+    explain:"Genres holds a list in one cell, which breaks 1NF. Fix: MOVIE_GENRE(MovieID, Genre), one row per genre."
+  }
+],
+medium: [
+  {
+    table:{name:"ENROLLMENT", cols:["StudentID","CourseID","StudentName","Grade"], pk:["StudentID","CourseID"],
+      rows:[["1042","CS101","Maya Chen","A"],["1042","MA201","Maya Chen","B+"],["1043","CS101","Leo Park","A-"]]},
+    deps:["StudentID, CourseID → Grade","StudentID → StudentName"],
+    answer:1,
+    hint:"Composite key alert. Does every non-key column need both parts of the key?",
+    explain:"Grade needs the whole key, which is fine. But StudentName only needs StudentID, which is just part of the key. That's a partial dependency, so the table stops at 1NF."
+  },
+  {
+    table:{name:"EMPLOYEE", cols:["EmpID","EmpName","DeptID","DeptName"], pk:["EmpID"],
+      rows:[["E1","Rosa","D2","Math"],["E2","Tomas","D2","Math"],["E3","June","D5","Science"]]},
+    deps:["EmpID → EmpName, DeptID","DeptID → DeptName"],
+    answer:2,
+    hint:"Single-column key, so 2NF is guaranteed. Now follow the chain EmpID → DeptID → ?",
+    explain:"The key is one column, so there are no partial dependencies (2NF). But DeptID → DeptName is a non-key column deciding another non-key column: a transitive dependency. So it's 2NF, not 3NF."
+  },
+  {
+    table:{name:"ORDER_LINE", cols:["OrderID","ProductID","Quantity","ProductPrice"], pk:["OrderID","ProductID"],
+      rows:[["5001","P10","3","$1.50"],["5002","P10","1","$1.50"],["5002","P22","2","$4.00"]]},
+    deps:["OrderID, ProductID → Quantity","ProductID → ProductPrice"],
+    answer:1,
+    hint:"Does ProductPrice care which order it's on?",
+    explain:"ProductPrice depends only on ProductID, which is half of the composite key. That partial dependency keeps it at 1NF. Fix: move ProductPrice into a PRODUCT table."
+  },
+  {
+    table:{name:"STUDENT", cols:["StudentID","Name","ZipCode","City"], pk:["StudentID"],
+      rows:[["1042","Maya","20850","Rockville"],["1043","Leo","20850","Rockville"],["1044","Ana","20901","Silver Spring"]]},
+    deps:["StudentID → Name, ZipCode","ZipCode → City"],
+    answer:2,
+    hint:"If you know the ZipCode, do you already know the City?",
+    explain:"ZipCode (non-key) decides City (non-key). That's a transitive dependency, so it fails 3NF. The key is a single column, so it does reach 2NF."
+  },
+  {
+    table:{name:"BOOKING", cols:["BookingID","GuestID","RoomNumber","CheckInDate"], pk:["BookingID"],
+      rows:[["B1","G4","301","2026-11-02"],["B2","G9","118","2026-11-02"],["B3","G4","205","2026-12-20"]]},
+    deps:["BookingID → GuestID, RoomNumber, CheckInDate"],
+    note:"Guest names and room prices live in their own tables.",
+    answer:3,
+    hint:"Hunt for any non-key column that decides another one. Find one?",
+    explain:"One-column key, and everything depends directly on BookingID with no chains between non-key columns. Clean 3NF."
+  },
+  {
+    table:{name:"TEST_SCORE", cols:["StudentID","TestID","Score"], pk:["StudentID","TestID"],
+      rows:[["1042","T1","88"],["1042","T2","93"],["1043","T1","71"]]},
+    deps:["StudentID, TestID → Score"],
+    answer:3,
+    hint:"A composite key doesn't automatically mean trouble.",
+    explain:"Score needs both the student and the test, so it depends on the whole key. No partial dependencies, no transitive ones. Composite key and still 3NF."
+  },
+  {
+    table:{name:"ASSIGNMENT", cols:["EmpID","ProjectID","Hours","ProjectName"], pk:["EmpID","ProjectID"],
+      rows:[["E1","PR7","12","Website Redo"],["E2","PR7","5","Website Redo"],["E1","PR9","8","Robot Arm"]]},
+    deps:["EmpID, ProjectID → Hours","ProjectID → ProjectName"],
+    prompt:"This table isn't in 2NF. Which dependency is to blame?",
+    options:["ProjectID → ProjectName","EmpID, ProjectID → Hours","Hours → ProjectName","EmpID → ProjectID"],
+    answer:0,
+    hint:"Look for the dependency that uses only half of the key.",
+    explain:"ProjectName depends only on ProjectID, part of the composite key. That's the partial dependency. Hours needs the whole key, which is fine, and the other two aren't real dependencies here."
+  },
+  {
+    table:{name:"PLAYER", cols:["PlayerID","PlayerName","TeamID","TeamCity"], pk:["PlayerID"],
+      rows:[["21","Jaylen","T3","Boston"],["7","Marcus","T3","Boston"],["30","Steph","T9","San Francisco"]]},
+    deps:["PlayerID → PlayerName, TeamID","TeamID → TeamCity"],
+    answer:2,
+    hint:"Boston shows up twice. Who actually decides TeamCity?",
+    explain:"TeamID decides TeamCity, and both are non-key columns: transitive dependency. One-column key means 2NF, but not 3NF."
+  },
+  {
+    prompt:"A table is in 1NF and its primary key is a single column. It's automatically in...",
+    options:["2NF","3NF","Nothing extra; you still have to check for partial dependencies","1NF only, since 2NF requires a composite key"],
+    answer:0,
+    hint:"Partial dependencies need a key with parts.",
+    explain:"A one-column key has no parts, so a partial dependency is impossible. That makes it 2NF for free. You still have to check for transitive dependencies before calling it 3NF."
+  },
+  {
+    table:{name:"SECTION", cols:["CourseID","SectionNo","Room","CourseTitle"], pk:["CourseID","SectionNo"],
+      rows:[["CS101","1","214","Intro to CS"],["CS101","2","108","Intro to CS"],["MA201","1","302","Statistics"]]},
+    deps:["CourseID, SectionNo → Room","CourseID → CourseTitle"],
+    answer:1,
+    hint:"Does the course title change from section 1 to section 2?",
+    explain:"CourseTitle depends only on CourseID, part of the composite key. Partial dependency, so it's stuck at 1NF."
+  }
+],
+hard: [
+  {
+    table:{name:"EMPLOYEE", cols:["EmpID","EmpName","DeptID","DeptName"], pk:["EmpID"],
+      rows:[["E1","Rosa","D2","Math"],["E2","Tomas","D2","Math"],["E3","June","D5","Science"]]},
+    deps:["EmpID → EmpName, DeptID","DeptID → DeptName"],
+    prompt:"Which split gets this into 3NF without losing information?",
+    options:[
+      "EMPLOYEE(EmpID, EmpName, DeptID) and DEPARTMENT(DeptID, DeptName)",
+      "EMPLOYEE(EmpID, EmpName) and DEPARTMENT(DeptID, DeptName)",
+      "EMPLOYEE(EmpID, EmpName, DeptName) and DEPARTMENT(DeptID, DeptName)",
+      "Keep one table but make (EmpID, DeptID) the primary key"
+    ],
+    answer:0,
+    hint:"You need to remove the chain but keep a link between the two tables.",
+    explain:"Moving DeptName into DEPARTMENT kills the transitive dependency, and keeping DeptID in EMPLOYEE as a foreign key keeps the link. Dropping DeptID loses who works where; keeping DeptName in EMPLOYEE keeps the repetition."
+  },
+  {
+    table:{name:"ENROLLMENT", cols:["StudentID","CourseID","StudentName","Grade"], pk:["StudentID","CourseID"],
+      rows:[["1042","CS101","Maya Chen","A"],["1042","MA201","Maya Chen","B+"],["1043","CS101","Leo Park","A-"]]},
+    deps:["StudentID, CourseID → Grade","StudentID → StudentName"],
+    prompt:"Which fix gets this table into 2NF?",
+    options:[
+      "STUDENT(StudentID, StudentName) and ENROLLMENT(StudentID, CourseID, Grade)",
+      "STUDENT(StudentID, StudentName, Grade) and ENROLLMENT(StudentID, CourseID)",
+      "Add StudentName to the primary key",
+      "Delete the Grade column"
+    ],
+    answer:0,
+    hint:"Move the column that depends on part of the key to a table where that part is the whole key.",
+    explain:"StudentName depends only on StudentID, so it moves to a STUDENT table keyed by StudentID. Grade still needs both StudentID and CourseID, so it stays in ENROLLMENT. Putting Grade in STUDENT would mean one grade per student, total."
+  },
+  {
+    table:{name:"REGISTRATION", cols:["StudentID","CourseID","StudentName","TeacherID","TeacherName"], pk:["StudentID","CourseID"],
+      rows:[["1042","CS101","Maya","T4","Ruiz"],["1043","CS101","Leo","T4","Ruiz"],["1042","MA201","Maya","T8","Kim"]]},
+    deps:["StudentID → StudentName","CourseID → TeacherID","TeacherID → TeacherName"],
+    answer:1,
+    hint:"It breaks more than one rule. The highest normal form is decided by the first rule it breaks.",
+    explain:"There's a transitive chain (TeacherID → TeacherName), but that doesn't matter yet: StudentName depends only on StudentID and TeacherID only on CourseID. Those partial dependencies stop it at 1NF before 3NF even comes up."
+  },
+  {
+    table:{name:"SHIPMENT_LINE", cols:["OrderID","LineNo","ProductID","ProductName","Qty"], pk:["OrderID","LineNo"],
+      rows:[["5001","1","P10","Pencil","3"],["5001","2","P22","Ruler","1"],["5002","1","P10","Pencil","5"]]},
+    deps:["OrderID, LineNo → ProductID, Qty","ProductID → ProductName"],
+    answer:2,
+    hint:"Composite key, but does anything depend on just OrderID or just LineNo?",
+    explain:"Nothing depends on only OrderID or only LineNo, so no partial dependencies: 2NF. But ProductID (non-key) decides ProductName (non-key). Transitive dependency, so not 3NF. Composite key, no partial dependency, sneaky."
+  },
+  {
+    table:{name:"ORDERS", cols:["OrderID","CustomerID","CustomerEmail","OrderDate"], pk:["OrderID"],
+      rows:[["5001","C3","ana@mail.com","2026-10-01"],["5002","C3","ana@mail.com","2026-10-14"],["5003","C8","ben@mail.com","2026-10-15"]]},
+    deps:["OrderID → CustomerID, OrderDate","CustomerID → CustomerEmail"],
+    answer:2,
+    hint:"If Ana changes her email, how many rows do you have to edit?",
+    explain:"CustomerID decides CustomerEmail, and neither is the key. Transitive dependency. One-column key means 2NF, but it misses 3NF."
+  },
+  {
+    table:{name:"INVOICE_LINE", cols:["InvoiceID","LineNo","Quantity","UnitPrice","LineTotal"], pk:["InvoiceID","LineNo"],
+      rows:[["900","1","3","$2.00","$6.00"],["900","2","1","$5.50","$5.50"],["901","1","4","$2.00","$8.00"]]},
+    deps:["InvoiceID, LineNo → Quantity, UnitPrice","Quantity, UnitPrice → LineTotal"],
+    note:"LineTotal is always Quantity × UnitPrice.",
+    answer:2,
+    hint:"LineTotal can be calculated from other non-key columns. What kind of dependency is that?",
+    explain:"Quantity and UnitPrice (both non-key) decide LineTotal. That's a transitive dependency hiding as a calculated column. No partial dependencies, so it's 2NF. Fix: drop LineTotal and calculate it when you need it."
+  },
+  {
+    prompt:"Which line sums up 3NF?",
+    options:[
+      "Every non-key column depends on the key, the whole key, and nothing but the key",
+      "Every table needs at least one foreign key",
+      "Split every table until it has only two columns",
+      "Every primary key must be a single number"
+    ],
+    answer:0,
+    hint:"Three parts: 1NF, 2NF, 3NF.",
+    explain:"\"The key\" is 1NF (rows identified by a key), \"the whole key\" is 2NF (no partial dependencies), \"nothing but the key\" is 3NF (no transitive dependencies)."
+  },
+  {
+    table:{name:"EMPLOYEE", cols:["EmpID","EmpName","DeptID","DeptName"], pk:["EmpID"],
+      rows:[["E1","Rosa","D2","Math"],["E2","Tomas","D2","Math"],["E3","June","D2","Math"]]},
+    deps:["EmpID → EmpName, DeptID","DeptID → DeptName"],
+    prompt:"Math gets renamed to Mathematics. You must change 40 rows, and if you miss one, the data contradicts itself. What's this called?",
+    options:["Update anomaly","Insertion anomaly","Deletion anomaly","Referential integrity"],
+    answer:0,
+    hint:"Which everyday SQL command are you running here?",
+    explain:"Changing one fact means editing many rows, and missing one leaves the data inconsistent. That's an update anomaly, and it's the classic symptom of a transitive dependency like DeptID → DeptName."
+  },
+  {
+    table:{name:"COURSE_ENROLL", cols:["StudentID","CourseID","CourseTitle","Grade"], pk:["StudentID","CourseID"],
+      rows:[["1042","CS101","Intro to CS","A"],["1043","CS101","Intro to CS","B"],["1043","CS301","Databases","A-"]]},
+    deps:["StudentID, CourseID → Grade","CourseID → CourseTitle"],
+    prompt:"Leo (1043) drops CS301 and his row is deleted. Now nobody knows CS301 is called Databases. What's this called?",
+    options:["Deletion anomaly","Update anomaly","Insertion anomaly","Transitive dependency"],
+    answer:0,
+    hint:"You lost a fact you never meant to delete.",
+    explain:"Deleting one enrollment wiped out the only record of the course title. That's a deletion anomaly, caused here by the partial dependency CourseID → CourseTitle."
+  },
+  {
+    table:{name:"CAR", cols:["VIN","Model","Make","Color"], pk:["VIN"],
+      rows:[["1HGCM8…","Civic","Honda","Blue"],["2T1BU4…","Corolla","Toyota","Red"],["1HGFA1…","Civic","Honda","Gray"]]},
+    deps:["VIN → Model, Color","Model → Make"],
+    answer:2,
+    hint:"Every Civic is a Honda. What does that tell you about Model and Make?",
+    explain:"Model (non-key) decides Make (non-key): transitive dependency. The key is a single column, so it's 2NF but not 3NF."
+  },
+  {
+    table:{name:"EMPLOYEE", cols:["EmpID","EmpName","DeptID","DeptName"], pk:["EmpID"],
+      rows:[["E1","Rosa","D2","Math"],["E3","June","D5","Science"]]},
+    deps:["EmpID → EmpName, DeptID","DeptID → DeptName"],
+    prompt:"The school opens a Robotics department, but nobody works there yet. You can't store it without an EmpID. What's this called?",
+    options:["Insertion anomaly","Deletion anomaly","Update anomaly","Partial dependency"],
+    answer:0,
+    hint:"You're trying to add a new fact and the table won't let you.",
+    explain:"You can't insert a department until an employee exists to carry it. That's an insertion anomaly. A separate DEPARTMENT table fixes it."
+  }
+]
+};
+
+const LADDER = [100,200,300,500,1000,2000,4000,8000,16000,32000,64000,125000,250000,500000,1000000];
+const SAFE = new Set([4, 9]); // indexes of $1,000 and $32,000
+const fmt = n => "$" + n.toLocaleString("en-US");
+
+/* ============================================================
+   STATE
+   ============================================================ */
+let questions = [], level = 0, selected = null, locked = false;
+let lifelines = {fifty:true, poll:true, phone:true};
+let current = null; // shuffled view of current question
+
+const $ = id => document.getElementById(id);
+const shuffle = a => { a = a.slice(); for (let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; };
+const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function buildGame(){
+  const pick = (pool,n) => shuffle(pool).slice(0,n);
+  questions = [...pick(BANK.easy,5), ...pick(BANK.medium,5), ...pick(BANK.hard,5)];
+  level = 0;
+  lifelines = {fifty:true, poll:true, phone:true};
+}
+
+function prepare(q){
+  // Standard NF questions keep their natural order; custom ones get shuffled.
+  if (!q.options){
+    return {...q, prompt:q.prompt || HIGHEST, opts:NF.map((t,i)=>({t, correct:i===q.answer}))};
+  }
+  const opts = shuffle(q.options.map((t,i)=>({t, correct:i===q.answer})));
+  return {...q, prompt:q.prompt || HIGHEST, opts};
+}
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+function el(tag, cls, text){ const e=document.createElement(tag); if(cls) e.className=cls; if(text!=null) e.textContent=text; return e; }
+
+function renderLadder(){
+  const ol = $("ladder"); ol.innerHTML="";
+  for (let i=LADDER.length-1;i>=0;i--){
+    const li = el("li");
+    if (SAFE.has(i)) li.classList.add("safe");
+    if (i<level) li.classList.add("done");
+    if (i===level) li.classList.add("now");
+    li.append(el("span","n",String(i+1)), el("span",null,fmt(LADDER[i])));
+    ol.append(li);
+  }
+  $("ladderMini").innerHTML = "";
+  const a = el("span"); a.append("Playing for "); a.append(el("b",null,fmt(LADDER[level])));
+  const b = el("span", null, "Banked: " + fmt(banked()));
+  $("ladderMini").append(a,b);
+}
+
+function renderTable(q){
+  const card = $("tableCard"); card.innerHTML="";
+  if (!q.table){ card.classList.add("hidden"); return; }
+  card.classList.remove("hidden");
+  const t = q.table;
+  card.append(el("h2","tname",t.name));
+  const wrap = el("div","tscroll");
+  const table = el("table","data");
+  const thead = el("thead"), tr = el("tr");
+  t.cols.forEach(c=>{ const th=el("th",t.pk.includes(c)?"pk":null,c); th.scope="col"; tr.append(th); });
+  thead.append(tr); table.append(thead);
+  const tbody = el("tbody");
+  t.rows.forEach(r=>{ const row=el("tr"); r.forEach(v=>{ row.append(el("td", v===""?"empty":null, v===""?"(empty)":v)); }); tbody.append(row); });
+  table.append(tbody); wrap.append(table); card.append(wrap);
+  const legend = el("p","legend"); legend.append(el("b",null,"Underlined gold"), " columns form the primary key.");
+  card.append(legend);
+  if (q.deps){
+    card.append(el("p","deps-label","Dependencies"));
+    const ul = el("ul","deps"); q.deps.forEach(d=>ul.append(el("li",null,d))); card.append(ul);
+  }
+  if (q.note) card.append(el("p","note",q.note));
+}
+
+function renderQuestion(){
+  current = prepare(questions[level]);
+  selected = null; locked = false;
+  const tierName = level<5 ? "Warm-up round" : level<10 ? "Getting serious" : "Hot seat";
+  $("qnum").innerHTML = ""; $("qnum").append(`Question ${level+1} for `, el("span",null,fmt(LADDER[level])));
+  $("tier").textContent = tierName;
+  renderTable(current);
+  $("prompt").textContent = current.prompt;
+  const box = $("answers"); box.innerHTML="";
+  current.opts.forEach((o,i)=>{
+    const b = el("button","ans");
+    b.dataset.i = i;
+    b.append(el("span","letter","ABCD"[i]), el("span","txt",o.t));
+    b.setAttribute("aria-label", `${"ABCD"[i]}: ${o.t}`);
+    b.addEventListener("click",()=>choose(i));
+    box.append(b);
+  });
+  $("extraPanel").innerHTML = "";
+  $("actions").innerHTML = "";
+  updateLifelines();
+  renderLadder();
+  window.scrollTo({top:0, behavior: reduceMotion ? "auto" : "smooth"});
+}
+
+function updateLifelines(){
+  $("l5050").disabled = !lifelines.fifty || locked;
+  $("lPoll").disabled = !lifelines.poll || locked;
+  $("lPhone").disabled = !lifelines.phone || locked;
+  $("walkBtn").textContent = `Walk away with ${fmt(level>0?LADDER[level-1]:0)}`;
+  $("walkBtn").disabled = locked;
+}
+
+function banked(){ // guaranteed money if you get the current question wrong
+  let s = 0; for (let i=0;i<level;i++) if (SAFE.has(i)) s = LADDER[i]; return s;
+}
+
+/* ============================================================
+   PLAY
+   ============================================================ */
+function choose(i){
+  if (locked) return;
+  const btns = [...$("answers").children];
+  if (btns[i].classList.contains("gone")) return;
+  if (selected === i){ finalAnswer(); return; }
+  selected = i;
+  btns.forEach((b,j)=>b.classList.toggle("selected", j===i));
+  const act = $("actions"); act.innerHTML="";
+  const fa = el("button","btn","Final answer"); fa.addEventListener("click", finalAnswer);
+  act.append(fa);
+  fa.focus({preventScroll:true});
+}
+
+function finalAnswer(){
+  if (selected===null || locked) return;
+  locked = true; updateLifelines();
+  const btns = [...$("answers").children];
+  btns.forEach(b=>b.disabled=true);
+  $("actions").innerHTML="";
+  btns[selected].classList.add("thinking");
+  setTimeout(()=>reveal(btns), reduceMotion ? 300 : 1600);
+}
+
+function reveal(btns){
+  const right = current.opts.findIndex(o=>o.correct);
+  btns[selected].classList.remove("thinking","selected");
+  btns[right].classList.add("correct");
+  const ok = selected===right;
+  if (!ok) btns[selected].classList.add("wrong");
+
+  const p = el("div","panel " + (ok?"good":"bad"));
+  p.append(el("h3",null, ok ? pickLine(RIGHT_LINES) : `The answer was ${"ABCD"[right]}: ${current.opts[right].t}`));
+  p.append(el("p",null,current.explain));
+  $("extraPanel").innerHTML=""; $("extraPanel").append(p);
+
+  const act = $("actions"); act.innerHTML="";
+  let btn;
+  if (ok && level===LADDER.length-1){
+    btn = el("button","btn","Collect $1,000,000"); btn.addEventListener("click",()=>endGame("million"));
+  } else if (ok){
+    btn = el("button","btn",`Next: ${fmt(LADDER[level+1])}`); btn.addEventListener("click",()=>{ level++; renderQuestion(); });
+  } else {
+    btn = el("button","btn","See results"); btn.addEventListener("click",()=>endGame("wrong"));
+  }
+  act.append(btn); btn.focus({preventScroll:true});
+  p.scrollIntoView({behavior: reduceMotion?"auto":"smooth", block:"nearest"});
+}
+
+const RIGHT_LINES = ["Correct!","That's the one.","Normalized and verified.","Nailed it.","Yep, locked in and right.","The key, the whole key, and you."];
+const pickLine = a => a[Math.floor(Math.random()*a.length)];
+
+/* ---------- Lifelines ---------- */
+$("l5050").addEventListener("click",()=>{
+  if (!lifelines.fifty || locked) return;
+  lifelines.fifty = false;
+  const wrongs = shuffle(current.opts.map((o,i)=>o.correct?null:i).filter(i=>i!==null)).slice(0,2);
+  const btns = [...$("answers").children];
+  wrongs.forEach(i=>{ btns[i].classList.add("gone"); btns[i].disabled=true; if(selected===i){selected=null;$("actions").innerHTML="";btns[i].classList.remove("selected");} });
+  updateLifelines();
+});
+
+$("lPoll").addEventListener("click",()=>{
+  if (!lifelines.poll || locked) return;
+  lifelines.poll = false; updateLifelines();
+  const btns = [...$("answers").children];
+  const live = current.opts.map((o,i)=>btns[i].classList.contains("gone")?null:i).filter(i=>i!==null);
+  const right = current.opts.findIndex(o=>o.correct);
+  // The class gets less sure as the questions get harder.
+  const sure = level<5 ? 0.72 : level<10 ? 0.55 : 0.42;
+  const w = current.opts.map((_,i)=>{
+    if (!live.includes(i)) return 0;
+    return i===right ? sure*100 + Math.random()*15 : Math.random()*(100-sure*100)/ (live.length-1||1) * 1.6;
+  });
+  const total = w.reduce((a,b)=>a+b,0);
+  let pct = w.map(x=>Math.round(x/total*100));
+  const diff = 100 - pct.reduce((a,b)=>a+b,0); pct[right]+=diff;
+
+  const panel = el("div","panel");
+  panel.append(el("h3",null,"The class votes"));
+  const poll = el("div","poll");
+  poll.setAttribute("role","img");
+  poll.setAttribute("aria-label", pct.map((v,i)=>`${"ABCD"[i]} ${v} percent`).join(", "));
+  const bars = [];
+  pct.forEach((v,i)=>{
+    const col = el("div","col");
+    col.append(el("div","pct",v+"%"));
+    const bar = el("div","bar"); bars.push([bar,v]); col.append(bar);
+    col.append(el("div","lab","ABCD"[i]));
+    poll.append(col);
+  });
+  panel.append(poll);
+  $("extraPanel").innerHTML=""; $("extraPanel").append(panel);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>bars.forEach(([b,v])=>b.style.height=(v*1.05)+"px")));
+});
+
+$("lPhone").addEventListener("click",()=>{
+  if (!lifelines.phone || locked) return;
+  lifelines.phone = false; updateLifelines();
+  const panel = el("div","panel hint");
+  panel.append(el("h3",null,"Your DBA friend says"));
+  panel.append(el("p",null,current.hint));
+  $("extraPanel").innerHTML=""; $("extraPanel").append(panel);
+});
+
+$("walkBtn").addEventListener("click",()=>{ if(!locked) endGame("walk"); });
+
+/* keyboard: A-D to pick, Enter to confirm */
+document.addEventListener("keydown",e=>{
+  if ($("gameScreen").classList.contains("hidden") || locked) return;
+  const k = e.key.toLowerCase();
+  const idx = "abcd".indexOf(k);
+  if (idx>=0 && !e.metaKey && !e.ctrlKey){ choose(idx); }
+});
+
+/* ============================================================
+   SCREENS
+   ============================================================ */
+function show(id){ ["titleScreen","gameScreen","endScreen"].forEach(s=>$(s).classList.toggle("hidden", s!==id)); }
+
+function endGame(how){
+  let won, headline, msg;
+  if (how==="million"){ won=1000000; headline="Fully normalized!"; msg="Fifteen for fifteen. Every table, every dependency, every key. Go tell your teacher."; }
+  else if (how==="walk"){ won = level>0 ? LADDER[level-1] : 0; headline="You walked away"; msg = won ? "Smart money. Want to see how far you can really get?" : "Walking away with nothing? Bold strategy."; }
+  else { won = banked(); headline = won ? "Game over, but you keep your safe money" : "Game over"; msg = won ? `You fell back to your last safe level. Safe levels are at $1,000 and $32,000.` : "Missed one before the $1,000 safe level. Shake it off and run it back."; }
+
+  const s = $("endScreen"); s.innerHTML="";
+  s.append(el("h2",null,headline));
+  s.append(el("div","won",fmt(won)));
+  s.append(el("p",null,msg));
+  if (how==="wrong"){
+    const p = el("div","panel bad");
+    p.append(el("h3",null,"The one that got you"));
+    p.append(el("p",null,current.prompt + (current.table ? ` (${current.table.name})` : "")));
+    p.append(el("p",null,current.explain));
+    s.append(p);
+  }
+  const row = el("div","cta-row");
+  const again = el("button","btn","Play again"); again.addEventListener("click",start);
+  const home = el("button","btn ghost","Back to title"); home.addEventListener("click",()=>show("titleScreen"));
+  row.append(again,home); s.append(row);
+  show("endScreen");
+  again.focus();
+}
+
+function start(){ buildGame(); show("gameScreen"); renderQuestion(); }
+
+$("startBtn").addEventListener("click",start);
+$("refreshBtn").addEventListener("click",()=>{
+  const r = $("refresher"); const open = r.classList.toggle("hidden")===false;
+  $("refreshBtn").setAttribute("aria-expanded", open);
+});
+</script>
+</body>
+</html>
